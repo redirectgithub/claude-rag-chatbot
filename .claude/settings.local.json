@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(sh)",
+      "Bash(~/.local/bin/uv --version)",
+      "Bash(lsof:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_evaluate",
+      "Bash(python -c:*)",
+      "Bash(uv run python:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(uv add:*)",
+      "Bash(git init:*)",
+      "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main status)",
+      "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main add .env.example .gitignore .python-version CLAUDE.md README.md backend/ docs/ frontend/ main.py pyproject.toml run.sh uv.lock Azure-RAG-SharePoint-Architecture.md Azure-RAG-SharePoint-Architecture.pdf)",
+      "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main diff --cached --stat)",
+      "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main commit -m \"$\\(cat <<''EOF''\nFix query pipeline bugs causing HTTP 500 \"query failed\" errors\n\nAdd 34 tests across search_tools, ai_generator, and rag_system to diagnose\nthe query failure pipeline. Four bugs identified and fixed:\n\n- document_processor: Normalize last-lesson chunk prefix to match mid-document\n  lessons \\(first chunk only gets \"Lesson N content:\" prefix\\)\n- vector_store: Add explicit return None in get_lesson_link exception handler\n- rag_system: Remove redundant \"Answer this question about course materials:\"\n  query wrapping since the system prompt already provides context\n- ai_generator: Include tools param in follow-up API call after tool execution\n  so the API can validate tool_result messages in history \\(primary crash cause\\)\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(./run.sh:*)",
+      "Bash(kill:*)",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_wait_for",
+      "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main log --oneline -5)",
+      "Bash(python3:*)",
+      "Bash(git:*)"
+    ]
+  }
+}
