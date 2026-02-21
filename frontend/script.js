@@ -48,8 +48,7 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
-    
+
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -73,7 +72,6 @@ function toggleTheme() {
     localStorage.setItem('theme', next);
     themeToggle.setAttribute('aria-label', next === 'light' ? 'Switch to dark theme' : 'Switch to light theme');
 }
-
 
 // Chat Functions
 async function sendMessage() {

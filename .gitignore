@@ -29,3 +29,7 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node / frontend dev tools
+node_modules/
+.eslintcache
