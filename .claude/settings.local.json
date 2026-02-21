@@ -24,7 +24,8 @@
       "mcp__playwright__browser_wait_for",
       "Bash(git -C /Users/ganeshhariharan/Documents/AIprojects/claudeprojects/Rag/starting-ragchatbot-codebase-main log --oneline -5)",
       "Bash(python3:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(chmod +x:*)"
     ]
   }
 }
