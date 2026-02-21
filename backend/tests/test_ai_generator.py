@@ -223,3 +223,191 @@ class TestAIGeneratorEdgeCases:
 
         assert tool_mgr.execute_tool.call_count == 2
         assert result == "combined answer"
+
+
+class TestSequentialToolCalling:
+
+    def test_two_sequential_tool_rounds(self):
+        """Claude makes 2 sequential tool calls across 2 separate API rounds."""
+        gen, client = _make_generator()
+
+        # Round 1: Claude requests get_course_outline
+        r1 = _message(
+            [_tool_use_block("tu_1", "get_course_outline", {"course_name": "AI"})],
+            stop_reason="tool_use",
+        )
+        # Round 2: Claude sees outline, requests search_course_content
+        r2 = _message(
+            [_tool_use_block("tu_2", "search_course_content", {"query": "neural nets"})],
+            stop_reason="tool_use",
+        )
+        # Final: Claude synthesizes answer
+        r3 = _message([_text_block("Neural nets are covered in lesson 3")], stop_reason="end_turn")
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = ["Lesson 3: Neural Networks", "Found: neural nets content"]
+        tools = [{"name": "get_course_outline"}, {"name": "search_course_content"}]
+
+        result = gen.generate_response("Find neural nets", tools=tools, tool_manager=tool_mgr)
+
+        assert client.messages.create.call_count == 3
+        assert tool_mgr.execute_tool.call_count == 2
+        assert result == "Neural nets are covered in lesson 3"
+
+    def test_stops_after_max_rounds(self):
+        """After 2 tool rounds, a 3rd tool_use is NOT executed."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "search_course_content", {"query": "a"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message(
+            [_tool_use_block("tu_2", "search_course_content", {"query": "b"})],
+            stop_reason="tool_use",
+        )
+        # 3rd response still has tool_use but also has text — loop is exhausted
+        r3 = _message(
+            [_text_block("Partial answer"), _tool_use_block("tu_3", "search_course_content", {"query": "c"})],
+            stop_reason="tool_use",
+        )
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = ["result a", "result b"]
+        tools = [{"name": "search_course_content"}]
+
+        result = gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        assert client.messages.create.call_count == 3
+        assert tool_mgr.execute_tool.call_count == 2  # 3rd tool NOT executed
+        assert result == "Partial answer"
+
+    def test_stops_when_no_tool_use_in_followup(self):
+        """Single-round backward compat: Claude uses a tool once, then responds with text."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "search_course_content", {"query": "q"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message([_text_block("Answer")], stop_reason="end_turn")
+        client.messages.create.side_effect = [r1, r2]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.return_value = "data"
+        tools = [{"name": "search_course_content"}]
+
+        result = gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        assert client.messages.create.call_count == 2
+        assert tool_mgr.execute_tool.call_count == 1
+        assert result == "Answer"
+
+    def test_tool_error_terminates_loop(self):
+        """When execute_tool raises an exception, error is sent as tool_result and loop stops."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "search_course_content", {"query": "q"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message([_text_block("Sorry, I encountered an error")], stop_reason="end_turn")
+        client.messages.create.side_effect = [r1, r2]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = RuntimeError("connection failed")
+        tools = [{"name": "search_course_content"}]
+
+        result = gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        assert client.messages.create.call_count == 2
+        assert result == "Sorry, I encountered an error"
+        # Verify error was sent as tool_result
+        second_call = client.messages.create.call_args_list[1]
+        messages = second_call.kwargs.get("messages") or second_call[1].get("messages")
+        tool_result_content = messages[-1]["content"][0]["content"]
+        assert "Tool execution error: connection failed" in tool_result_content
+
+    def test_second_round_message_structure(self):
+        """The 3rd API call should have 5 messages: user, asst, user(result), asst, user(result)."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "get_course_outline", {"course_name": "X"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message(
+            [_tool_use_block("tu_2", "search_course_content", {"query": "topic"})],
+            stop_reason="tool_use",
+        )
+        r3 = _message([_text_block("Final")], stop_reason="end_turn")
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = ["outline data", "search data"]
+        tools = [{"name": "get_course_outline"}, {"name": "search_course_content"}]
+
+        gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        third_call = client.messages.create.call_args_list[2]
+        messages = third_call.kwargs.get("messages") or third_call[1].get("messages")
+        assert len(messages) == 5
+        assert messages[0]["role"] == "user"
+        assert messages[1]["role"] == "assistant"
+        assert messages[2]["role"] == "user"  # tool_result round 1
+        assert messages[3]["role"] == "assistant"
+        assert messages[4]["role"] == "user"  # tool_result round 2
+
+    def test_all_api_calls_include_tools_param(self):
+        """Every API call in a multi-round flow must include the tools param."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "search_course_content", {"query": "a"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message(
+            [_tool_use_block("tu_2", "search_course_content", {"query": "b"})],
+            stop_reason="tool_use",
+        )
+        r3 = _message([_text_block("Done")], stop_reason="end_turn")
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = ["res a", "res b"]
+        tools = [{"name": "search_course_content"}]
+
+        gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        for i, call_item in enumerate(client.messages.create.call_args_list):
+            params = call_item.kwargs if call_item.kwargs else call_item[1]
+            assert "tools" in params, f"API call {i} missing 'tools' param"
+
+    def test_extract_text_from_mixed_content(self):
+        """When max rounds exhausted and response has [tool_use, text], returns the text."""
+        gen, client = _make_generator()
+
+        r1 = _message(
+            [_tool_use_block("tu_1", "search_course_content", {"query": "a"})],
+            stop_reason="tool_use",
+        )
+        r2 = _message(
+            [_tool_use_block("tu_2", "search_course_content", {"query": "b"})],
+            stop_reason="tool_use",
+        )
+        # Final response: tool_use block first, then text — text should be extracted
+        r3 = _message(
+            [_tool_use_block("tu_3", "search_course_content", {"query": "c"}), _text_block("Extracted answer")],
+            stop_reason="tool_use",
+        )
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        tool_mgr = MagicMock()
+        tool_mgr.execute_tool.side_effect = ["res a", "res b"]
+        tools = [{"name": "search_course_content"}]
+
+        result = gen.generate_response("q", tools=tools, tool_manager=tool_mgr)
+
+        assert result == "Extracted answer"
