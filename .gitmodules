@@ -1,0 +1,3 @@
+[submodule "starting-ragchatbot-codebase-main"]
+	path = starting-ragchatbot-codebase-main
+	url = https://github.com/redirectgithub/claude-rag-chatbot.git
