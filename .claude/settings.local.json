@@ -26,7 +26,8 @@
       "Bash(python3:*)",
       "Bash(git:*)",
       "Bash(chmod +x:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(gh auth:*)"
     ]
   }
 }
